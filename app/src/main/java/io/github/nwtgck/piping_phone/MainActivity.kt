@@ -1,11 +1,9 @@
 package io.github.nwtgck.piping_phone
 
+import android.media.*
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.AsyncTask
 import android.util.Log
 import android.widget.Button
@@ -15,6 +13,7 @@ import java.io.PipedOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.max
+import android.media.AudioTrack.MODE_STREAM
 
 
 // Record audio
@@ -95,6 +94,18 @@ class MainActivity : AppCompatActivity() {
         val pOut = PipedOutputStream()
         val pIn = PipedInputStream(pOut)
         recordButton.setOnClickListener {
+
+            // (from: http://ytch.hatenablog.com/entry/2013/07/21/213130)
+            val audioTrack = AudioTrack(
+                AudioManager.STREAM_VOICE_CALL,
+                44100, // TODO: hard code
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                (44100 / 10) * 2, // TODO: hard code
+                MODE_STREAM
+            )
+            audioTrack.play()
+
             recordAudio { audioArray ->
                 cnt += 1
                 Toast.makeText(applicationContext, cnt.toString(), Toast.LENGTH_LONG).show()
@@ -102,27 +113,30 @@ class MainActivity : AppCompatActivity() {
             }
 
             // (from: https://qiita.com/furu8ma/items/0194a69a50aa62b8aa6c)
-            val task = object : AsyncTask<Void, Void, Void>() {
+            val getTask = object : AsyncTask<Void, Void, Void>() {
                 override fun doInBackground(vararg params: Void): Void? {
                     var con: HttpURLConnection? = null
                     try {
                         // TODO: hard code
-                        val urlStr = "http://ppng.ml/hoge2"
+                        val urlStr = "http://ppng.ml/hoge4"
                         val url = URL(urlStr)
                         con = url.openConnection() as HttpURLConnection
-                        con.requestMethod = "POST"
+                        con.requestMethod = "GET"
                         con.instanceFollowRedirects = false
                         con.doInput = true
-                        con.doOutput = true
-                        con.allowUserInteraction = true
-                        con.setChunkedStreamingMode(10)
+                        con.doOutput = false
+//                        con.allowUserInteraction = true
+                        con.setChunkedStreamingMode(256)
                         con.connect()
 
-                        val os = con.outputStream
+                        val iStream = con.inputStream
 
-                        val bytes = ByteArray(16)
-                        while(pIn.read(bytes) > 0) {
-                            os.write(bytes)
+                        val bytes = ByteArray((44100 / 10) * 2) // TODO: Hard code
+                        var read = 0
+                        while({read = iStream.read(bytes);  read}() > 0) {
+//                            Log.i("read size", read.toString())
+//                            Log.i("bytes:", bytes.toList().toString())
+                            audioTrack.write(bytes, 0, read)
                         }
 
                     } catch (e: InterruptedException) {
@@ -133,7 +147,44 @@ class MainActivity : AppCompatActivity() {
                     return null
                 }
             }
-            task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+            getTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+
+
+            if(false) {
+                // (from: https://qiita.com/furu8ma/items/0194a69a50aa62b8aa6c)
+                val task = object : AsyncTask<Void, Void, Void>() {
+                    override fun doInBackground(vararg params: Void): Void? {
+                        var con: HttpURLConnection? = null
+                        try {
+                            // TODO: hard code
+                            val urlStr = "http://ppng.ml/hoge2"
+                            val url = URL(urlStr)
+                            con = url.openConnection() as HttpURLConnection
+                            con.requestMethod = "POST"
+                            con.instanceFollowRedirects = false
+                            con.doInput = true
+                            con.doOutput = true
+                            con.allowUserInteraction = true
+                            con.setChunkedStreamingMode(10)
+                            con.connect()
+
+                            val os = con.outputStream
+
+                            val bytes = ByteArray(16)
+                            while (pIn.read(bytes) > 0) {
+                                os.write(bytes)
+                            }
+
+                        } catch (e: InterruptedException) {
+                            Log.i("error", e.message)
+                        } finally {
+                            con?.disconnect()
+                        }
+                        return null
+                    }
+                }
+                task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+            }
         }
     }
 }
