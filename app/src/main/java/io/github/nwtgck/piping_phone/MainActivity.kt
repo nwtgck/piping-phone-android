@@ -1,23 +1,25 @@
 package io.github.nwtgck.piping_phone
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.media.*
-import android.support.v7.app.AppCompatActivity
-import android.os.Bundle
-
+import android.media.AudioTrack.MODE_STREAM
 import android.os.AsyncTask
+import android.os.Bundle
+import android.support.v7.app.AlertDialog
+import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.widget.Button
+import android.widget.EditText
 import android.widget.Toast
+import permissions.dispatcher.*
+import java.io.BufferedInputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.math.max
-import android.media.AudioTrack.MODE_STREAM
-import android.widget.EditText
-import java.io.BufferedInputStream
 import java.security.SecureRandom
+import kotlin.math.max
 
 
 // Record audio
@@ -103,39 +105,72 @@ fun randomConnectId(stringLen: Int): String {
     return randomString
 }
 
-class MainActivity : AppCompatActivity() {
+@RuntimePermissions
+class MainActivity : AppCompatActivity()  {
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Server URL edit
-        val serverUrlEdit: EditText = findViewById(R.id.server_url)
         // Connect ID edit
-        val connectIdEdit: EditText = findViewById(R.id.connect_id)
-        // Peer's connect ID edit
-        val peerConnectIdEdit: EditText = findViewById(R.id.connection_id)
+        var connectIdEdit: EditText = findViewById(R.id.connect_id)
         // Connect button
-        val connectButton: Button = findViewById(R.id.connect_button)
+        var connectButton: Button = findViewById(R.id.connect_button)
 
         // Set random connect ID
         connectIdEdit.setText(randomConnectId(3))
 
         // On connect button clicked
         connectButton.setOnClickListener {
-            // Get server base URL
-            val serverUrl: String = serverUrlEdit.text.toString()
-            // Get connect ID
-            val connectId: String = connectIdEdit.text.toString()
-            // Get peer's connect ID
-            val peerConnectId: String = peerConnectIdEdit.text.toString()
-
-            // Record and send sound
-            recordAndSendSound(serverUrl, connectId, peerConnectId)
-
-            // Receive and play sound
-            receiveAndPlaySound(serverUrl, connectId, peerConnectId)
+            recordSendReceivePlayAudioWithPermissionCheck()
         }
+    }
+
+    @NeedsPermission(Manifest.permission.RECORD_AUDIO)
+    fun recordSendReceivePlayAudio() {
+        // Server URL edit
+        var serverUrlEdit: EditText = findViewById(R.id.server_url)
+        // Connect ID edit
+        var connectIdEdit: EditText = findViewById(R.id.connect_id)
+        // Peer's connect ID edit
+        var peerConnectIdEdit: EditText = findViewById(R.id.connection_id)
+
+
+        // Get server base URL
+        val serverUrl: String = serverUrlEdit.text.toString()
+        // Get connect ID
+        val connectId: String = connectIdEdit.text.toString()
+        // Get peer's connect ID
+        val peerConnectId: String = peerConnectIdEdit.text.toString()
+
+        // Record and send sound
+        recordAndSendSound(serverUrl, connectId, peerConnectId)
+
+        // Receive and play sound
+        receiveAndPlaySound(serverUrl, connectId, peerConnectId)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // NOTE: delegate the permission handling to generated function
+        onRequestPermissionsResult(requestCode, grantResults)
+    }
+
+    @OnShowRationale(Manifest.permission.RECORD_AUDIO)
+    fun showRationaleForRecordAudio(request: PermissionRequest) {
+        showRationaleDialog("A phone needs to send your voice to your receiver.", request)
+    }
+
+    @OnPermissionDenied(Manifest.permission.RECORD_AUDIO)
+    fun onRecordAudioDenied() {
+        Toast.makeText(this, "record audio denied", Toast.LENGTH_SHORT).show()
+    }
+
+    @OnNeverAskAgain(Manifest.permission.RECORD_AUDIO)
+    fun onRecordAudioNeverAskAgain() {
+        Toast.makeText(this, "never_askagain", Toast.LENGTH_SHORT).show()
     }
 
     private fun recordAndSendSound(serverUrl: String, connectId: String, peerConnectId: String) {
@@ -255,5 +290,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
         getTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR)
+    }
+
+    // (base: https://github.com/permissions-dispatcher/PermissionsDispatcher/blob/95c7286ae4cb42cc6880d4d4031619ac1bacf03b/sample/src/main/java/permissions/dispatcher/sample/MainActivity.java#L107)
+    private fun showRationaleDialog(messageResId: String, request: PermissionRequest) {
+        AlertDialog.Builder(this)
+            .setPositiveButton("Allow", { dialog, which -> request.proceed() })
+            .setNegativeButton("Deny", { dialog, which -> request.cancel() })
+            .setCancelable(false)
+            .setMessage(messageResId)
+            .show()
     }
 }
