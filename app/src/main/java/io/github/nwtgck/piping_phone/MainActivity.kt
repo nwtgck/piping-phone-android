@@ -23,7 +23,7 @@ import java.security.SecureRandom
 // Record audio
 // (Play command: play -t raw -r 44100 -e signed -b 16 -c 1 hoge2.rawfile) (command from: https://stackoverflow.com/a/25362384/2885946)
 // (from: https://qiita.com/ino-shin/items/214dba25f49fa098402f)
-fun recordAudio(callback: (ByteArray) -> Unit){
+fun recordAudio(callback: (ByteArray, Int) -> Unit): Int {
     // Sampling rate (Hz)
     val samplingRate = 44100
 
@@ -41,11 +41,13 @@ fun recordAudio(callback: (ByteArray) -> Unit){
     // (NOTE: This should be > oneFrameSizeInByte)
     // (NOTE: It is necessary to make it larger than the minimum value required by the device)
     val audioBufferSizeInByte =
-        max(oneFrameSizeInByte * 10,
-            android.media.AudioRecord.getMinBufferSize(samplingRate,
+        max(oneFrameSizeInByte,
+            android.media.AudioRecord.getMinBufferSize(
+                samplingRate,
                 AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT))
-
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+        )
 
     // Create audio record
     val audioRecord = AudioRecord(
@@ -65,9 +67,9 @@ fun recordAudio(callback: (ByteArray) -> Unit){
     audioRecord.setRecordPositionUpdateListener(object : AudioRecord.OnRecordPositionUpdateListener {
         // Process in each frame
         override fun onPeriodicNotification(recorder: AudioRecord) {
-            recorder.read(audioDataArray, 0, audioDataArray.size)
-            Log.i("AudioRecord", "read size=${audioDataArray.size}")
-            callback(audioDataArray)
+            val read = recorder.read(audioDataArray, 0, audioDataArray.size)
+            Log.i("AudioRecord", "read size=${read}")
+            callback(audioDataArray, read)
         }
 
         override fun onMarkerReached(recorder: AudioRecord) {
@@ -80,6 +82,9 @@ fun recordAudio(callback: (ByteArray) -> Unit){
     // Start recording
     audioRecord.startRecording()
     Log.i("in recordAudio","after start")
+
+    // Return buffer size
+    return audioBufferSizeInByte
 }
 
 fun getPath(fromId: String, toId: String): String {
@@ -140,11 +145,12 @@ class MainActivity : AppCompatActivity() {
         val pOut = PipedOutputStream()
         val pIn = PipedInputStream(pOut)
 
-        recordAudio { audioArray ->
+        val bufferSize = recordAudio { audioArray, read ->
             cnt += 1
             Toast.makeText(applicationContext, cnt.toString(), Toast.LENGTH_LONG).show()
-            pOut.write(audioArray)
+            pOut.write(audioArray, 0, read)
         }
+        Log.i("bufferSize record", bufferSize.toString())
 
         // (from: https://qiita.com/furu8ma/items/0194a69a50aa62b8aa6c)
         val task = @SuppressLint("StaticFieldLeak")
@@ -155,7 +161,7 @@ class MainActivity : AppCompatActivity() {
                     // Create URL string
                     // TODO: Construct URL not to use "/" manually
                     val urlStr = "${serverUrl}/${getPath(connectId, peerConnectId)}"
-                    Log.i("urlStr", urlStr)
+                    Log.i("POST urlStr", urlStr)
                     val url = URL(urlStr)
                     val con = url.openConnection() as HttpURLConnection
                     con.requestMethod = "POST"
@@ -163,14 +169,16 @@ class MainActivity : AppCompatActivity() {
                     con.doInput = true
                     con.doOutput = true
                     con.allowUserInteraction = true
-                    con.setChunkedStreamingMode(10)
+                    con.setChunkedStreamingMode(128)
                     con.connect()
 
                     val os = con.outputStream
 
-                    val bytes = ByteArray(16)
-                    while (pIn.read(bytes) > 0) {
-                        os.write(bytes)
+                    val bytes = ByteArray(512)
+                    var read = 0
+                    while ({read = pIn.read(bytes); read}() > 0) {
+                        os.write(bytes, 0, read)
+                        Thread.yield()
                     }
 
                 } catch (e: Throwable) {
@@ -235,6 +243,7 @@ class MainActivity : AppCompatActivity() {
                         } while (totalRead != bytes.size)
                         audioTrack.write(bytes, 0, totalRead)
                         if(read < 0) break
+                        Thread.yield()
                     }
 
                 } catch (e: Throwable) {
