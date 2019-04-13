@@ -75,8 +75,9 @@ fun recordAudio(callback: (ByteArray, Int) -> Unit): Int {
         }
 
         override fun onMarkerReached(recorder: AudioRecord) {
-            recorder.read(audioDataArray, 0, oneFrameDataCount)
-            Log.i("AudioRecord", "mark size=${audioDataArray.size}")
+            val read = recorder.read(audioDataArray, 0, oneFrameDataCount)
+            callback(audioDataArray, read)
+            Log.i("AudioRecord", "mark size=${read}")
         }
     })
 
@@ -108,7 +109,7 @@ fun randomConnectId(stringLen: Int): String {
 @RuntimePermissions
 class MainActivity : AppCompatActivity()  {
 
-
+//    var logTextView: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -215,7 +216,7 @@ class MainActivity : AppCompatActivity()  {
                         os.write(bytes, 0, read)
                         Thread.yield()
                     }
-
+                    Log.i("finish", "POST finished")
                 } catch (e: Throwable) {
                     Log.i("error", e.message)
                 } finally {
@@ -280,6 +281,7 @@ class MainActivity : AppCompatActivity()  {
                         if(read < 0) break
                         Thread.yield()
                     }
+                    Log.i("finish", "GET finished")
 
                 } catch (e: Throwable) {
                     Log.i("error", e.message)
