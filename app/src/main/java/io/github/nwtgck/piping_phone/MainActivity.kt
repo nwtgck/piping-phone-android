@@ -2,6 +2,7 @@ package io.github.nwtgck.piping_phone
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.media.*
 import android.media.AudioTrack.MODE_STREAM
 import android.os.AsyncTask
@@ -109,23 +110,52 @@ fun randomConnectId(stringLen: Int): String {
 @RuntimePermissions
 class MainActivity : AppCompatActivity()  {
 
-//    var logTextView: TextView? = null
+    companion object {
+        val CONNECT_ID_PREF_KEY      = "CONNECT_ID_PREF_KEY"
+        val PEER_CONNECT_ID_PREF_KEY = "PEER_CONNECT_ID_PREF_KEY"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Get shared preferences
+        val pref = getSharedPreferences("pref", Context.MODE_PRIVATE)
+
         // Connect ID edit
         var connectIdEdit: EditText = findViewById(R.id.connect_id)
+        // Peer's connect ID edit
+        var peerConnectIdEdit: EditText = findViewById(R.id.connection_id)
         // Connect button
         var connectButton: Button = findViewById(R.id.connect_button)
+        // Save connect-IDs button
+        val saveConnectIdsButton: Button = findViewById(R.id.save_connect_ids_button)
 
         // Set random connect ID
-        connectIdEdit.setText(randomConnectId(3))
+        connectIdEdit.setText(
+            pref.getString(
+                CONNECT_ID_PREF_KEY,
+                randomConnectId(3)
+            )
+        )
+
+        // Set peer's connect ID
+        peerConnectIdEdit.setText(
+            pref.getString(PEER_CONNECT_ID_PREF_KEY, "")
+        )
 
         // On connect button clicked
         connectButton.setOnClickListener {
             recordSendReceivePlayAudioWithPermissionCheck()
+        }
+
+        saveConnectIdsButton.setOnClickListener {
+            // Save connect IDs
+            pref.edit()
+                .putString(CONNECT_ID_PREF_KEY, connectIdEdit.text.toString())
+                .putString(PEER_CONNECT_ID_PREF_KEY, peerConnectIdEdit.text.toString())
+                .apply()
+            Toast.makeText(applicationContext, "Connect IDs saved", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -185,6 +215,7 @@ class MainActivity : AppCompatActivity()  {
             cnt += 1
             Toast.makeText(applicationContext, cnt.toString(), Toast.LENGTH_LONG).show()
             pOut.write(audioArray, 0, read)
+            Log.i("RECORD", "${read} bytes")
         }
         Log.i("bufferSize record", bufferSize.toString())
 
@@ -214,6 +245,7 @@ class MainActivity : AppCompatActivity()  {
                     var read = 0
                     while ({read = pIn.read(bytes); read}() > 0) {
                         os.write(bytes, 0, read)
+                        Log.i("Record WRITE", "write ${read} bytes")
                         Thread.yield()
                     }
                     Log.i("finish", "POST finished")
@@ -278,13 +310,14 @@ class MainActivity : AppCompatActivity()  {
                             totalRead += read
                         } while (totalRead != bytes.size)
                         audioTrack.write(bytes, 0, totalRead)
+                        Log.i("READ PLAY", "read ${totalRead} bytes")
                         if(read < 0) break
                         Thread.yield()
                     }
                     Log.i("finish", "GET finished")
 
                 } catch (e: Throwable) {
-                    Log.i("error", e.message)
+                    Log.e("error message", "${e?.message}")
                 } finally {
                     con?.disconnect()
                 }

@@ -40,5 +40,12 @@
                 android:layout_height="wrap_content"
                 android:text="Connect"/>
 
+        <!-- NOTE: For debugging -->
+        <Button android:id="@+id/save_connect_ids_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save IDs"/>
+
+
     </LinearLayout>
 </android.support.constraint.ConstraintLayout>
