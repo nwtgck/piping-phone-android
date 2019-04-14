@@ -213,7 +213,7 @@ class MainActivity : AppCompatActivity()  {
 
         val bufferSize = recordAudio { audioArray, read ->
             cnt += 1
-            Toast.makeText(applicationContext, cnt.toString(), Toast.LENGTH_LONG).show()
+            Toast.makeText(applicationContext, "record: ${cnt}", Toast.LENGTH_LONG).show()
             pOut.write(audioArray, 0, read)
             Log.i("RECORD", "${read} bytes")
         }
@@ -236,19 +236,20 @@ class MainActivity : AppCompatActivity()  {
                     con.doInput = true
                     con.doOutput = true
                     con.allowUserInteraction = true
-                    con.setChunkedStreamingMode(128)
+                    con.setChunkedStreamingMode(bufferSize / 2)
                     con.connect()
 
                     val os = con.outputStream
 
-                    val bytes = ByteArray(512)
+                    val bytes = ByteArray(bufferSize)
                     var read = 0
                     while ({read = pIn.read(bytes); read}() > 0) {
+                        Log.i("Before Record", "before record")
                         os.write(bytes, 0, read)
                         Log.i("Record WRITE", "write ${read} bytes")
                         Thread.yield()
                     }
-                    Log.i("finish", "POST finished")
+                    Log.i("Record finish", "POST finished")
                 } catch (e: Throwable) {
                     Log.i("error", e.message)
                 } finally {
@@ -314,7 +315,7 @@ class MainActivity : AppCompatActivity()  {
                         if(read < 0) break
                         Thread.yield()
                     }
-                    Log.i("finish", "GET finished")
+                    Log.i("READ PLAY finish", "GET finished")
 
                 } catch (e: Throwable) {
                     Log.e("error message", "${e?.message}")
