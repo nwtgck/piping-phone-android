@@ -15,18 +15,16 @@ import android.widget.EditText
 import android.widget.Toast
 import permissions.dispatcher.*
 import java.io.BufferedInputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.SecureRandom
 import kotlin.math.max
 
 
-// Record audio
+// Create a RecordAudio
 // (Play command: play -t raw -r 44100 -e signed -b 16 -c 1 hoge2.rawfile) (command from: https://stackoverflow.com/a/25362384/2885946)
 // (from: https://qiita.com/ino-shin/items/214dba25f49fa098402f)
-fun recordAudio(callback: (ByteArray, Int) -> Unit): Int {
+fun createAudioRecord(): AudioRecord {
     // Sampling rate (Hz)
     val samplingRate = 44100
 
@@ -58,37 +56,10 @@ fun recordAudio(callback: (ByteArray, Int) -> Unit): Int {
         samplingRate,
         AudioFormat.CHANNEL_IN_MONO,
         AudioFormat.ENCODING_PCM_16BIT,
-        audioBufferSizeInByte)
+        audioBufferSizeInByte
+    )
 
-    audioRecord.positionNotificationPeriod = oneFrameDataCount
-
-    audioRecord.notificationMarkerPosition = 40000
-
-    val audioDataArray = ByteArray(oneFrameSizeInByte)
-
-
-    audioRecord.setRecordPositionUpdateListener(object : AudioRecord.OnRecordPositionUpdateListener {
-        // Process in each frame
-        override fun onPeriodicNotification(recorder: AudioRecord) {
-            val read = recorder.read(audioDataArray, 0, audioDataArray.size)
-            Log.i("AudioRecord", "read size=${read}")
-            callback(audioDataArray, read)
-        }
-
-        override fun onMarkerReached(recorder: AudioRecord) {
-            val read = recorder.read(audioDataArray, 0, oneFrameDataCount)
-            callback(audioDataArray, read)
-            Log.i("AudioRecord", "mark size=${read}")
-        }
-    })
-
-    Log.i("in recordAudio","before start")
-    // Start recording
-    audioRecord.startRecording()
-    Log.i("in recordAudio","after start")
-
-    // Return buffer size
-    return audioBufferSizeInByte
+    return audioRecord
 }
 
 fun getPath(fromId: String, toId: String): String {
@@ -205,20 +176,6 @@ class MainActivity : AppCompatActivity()  {
     }
 
     private fun recordAndSendSound(serverUrl: String, connectId: String, peerConnectId: String) {
-        // TODO: Remove
-        var cnt = 0
-
-        val pOut = PipedOutputStream()
-        val pIn = PipedInputStream(pOut)
-
-        val bufferSize = recordAudio { audioArray, read ->
-            cnt += 1
-            Toast.makeText(applicationContext, "record: ${cnt}", Toast.LENGTH_LONG).show()
-            pOut.write(audioArray, 0, read)
-            Log.i("RECORD", "${read} bytes")
-        }
-        Log.i("bufferSize record", bufferSize.toString())
-
         // (from: https://qiita.com/furu8ma/items/0194a69a50aa62b8aa6c)
         val task = @SuppressLint("StaticFieldLeak")
         object : AsyncTask<Void, Void, Void>() {
@@ -236,14 +193,21 @@ class MainActivity : AppCompatActivity()  {
                     con.doInput = true
                     con.doOutput = true
                     con.allowUserInteraction = true
-                    con.setChunkedStreamingMode(bufferSize / 2)
+
+                    val audioRecord = createAudioRecord()
+                    Log.i("audioRecord.bufferSizeInFrames", audioRecord.bufferSizeInFrames.toString())
+
+                    con.setChunkedStreamingMode(audioRecord.bufferSizeInFrames / 2)
                     con.connect()
+
+                    // Start recording
+                    audioRecord.startRecording()
 
                     val os = con.outputStream
 
-                    val bytes = ByteArray(bufferSize)
+                    val bytes = ByteArray(audioRecord.bufferSizeInFrames)
                     var read = 0
-                    while ({read = pIn.read(bytes); read}() > 0) {
+                    while ({read = audioRecord.read(bytes, 0, bytes.size); read}() > 0) {
                         Log.i("Before Record", "before record")
                         os.write(bytes, 0, read)
                         Log.i("Record WRITE", "write ${read} bytes")
