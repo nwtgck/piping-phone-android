@@ -38,5 +38,5 @@ dependencies {
         // Remove this if you use it in Fragment
         exclude module: "support-v13"
     }
-    kapt "com.github.hotchemi:permissionsdispatcher-processor:3.3.1"
+    kapt "com.github.hotchemi:permissionsdispatcher-processor:4.1.0"
 }
