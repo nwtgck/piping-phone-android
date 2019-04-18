@@ -34,7 +34,7 @@ dependencies {
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
 
     // (from: https://dev.classmethod.jp/smartphone/android/permissions-dispatcher/)
-    implementation("com.github.hotchemi:permissionsdispatcher:3.3.1") {
+    implementation("com.github.hotchemi:permissionsdispatcher:3.3.2") {
         // Remove this if you use it in Fragment
         exclude module: "support-v13"
     }
